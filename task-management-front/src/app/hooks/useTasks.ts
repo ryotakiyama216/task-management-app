@@ -3,39 +3,83 @@
 import { useEffect, useState } from "react";
 import { Task } from "@/src/types/task";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
+
 export const useTasks = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // 初回ロード時 localStorage から読み込む
-  useEffect(() => {
-    const stored = localStorage.getItem("tasks");
-    if (stored) {
-      setTasks(JSON.parse(stored));
+  // ---------------------------
+  // 📌 タスク一覧取得 (GET /tasks)
+  // ---------------------------
+  const fetchTasks = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/tasks`);
+      const data = await res.json();
+      setTasks(data);
+    } catch (err) {
+      console.error("タスク取得エラー:", err);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchTasks();
   }, []);
 
-  // localStorage に保存する
-  const saveTasks = (newTasks: Task[]) => {
-    setTasks(newTasks);
-    localStorage.setItem("tasks", JSON.stringify(newTasks));
-  };
-
-  // タスク追加
-  const addTask = (text: string) => {
+  // ---------------------------
+  // 📌 タスク追加 (POST /tasks)
+  // ---------------------------
+  const addTask = async (title: string, description: string, priority: number, status: number) => {
     const newTask: Task = {
       id: crypto.randomUUID(),
-      text,
-      createdAt: new Date().toISOString(),
+      task_title: title,
+      task_description: description,
+      task_priority: priority,
+      task_status: status,
     };
 
-    saveTasks([...tasks, newTask]);
+    try {
+      const res = await fetch(`${API_BASE}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newTask),
+      });
+
+      if (!res.ok) throw new Error("APIエラー: 追加できませんでした");
+
+      // APIが成功したらフロントの state も更新
+      setTasks((prev) => [...prev, newTask]);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  // タスク削除
-  const removeTask = (id: string) => {
-    const newTasks = tasks.filter((task) => task.id !== id);
-    saveTasks(newTasks);
+  // ---------------------------
+  // 📌 タスク削除 (DELETE /tasks/{id})
+  // ---------------------------
+  const removeTask = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("削除できませんでした");
+
+      setTasks((prev) => prev.filter((task) => task.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  return { tasks, addTask, removeTask };
+  return {
+    tasks,
+    loading,
+    addTask,
+    removeTask,
+    reload: fetchTasks,
+  };
 };
+
